@@ -1,0 +1,34 @@
+tautulli:
+  url: << Tautulli URL >>
+  api_key: << Tautulli API Key >>
+plex:
+  url: << Plex URL >>
+  token: << PLEX TOKEN >>
+radarr:
+  4k:
+    url: << RADARR 4K URL >>
+    api_key: << RADARR 4K API KEY >>
+  1080p:
+    url: << RADARR 1080P URL >>
+    api_key: << RADARR 1080P API KEY >>
+overseerr:
+  url: << OVERSEERR URL >>
+  api_key: << OVERSEERR API KEY >>
+  email: << OVERSEERR EMAIL >>
+  password: << OVERSEERR PASSWORD >>
+admin_emails:
+  - << ADMIN EMAIL 1 >>
+  - << ADMIN EMAIL 2 >>
+deletion_threshold:
+  days:
+    users:
+      admin: 365 # If added by an admin, delete after 365 days
+      user: 14 # If added by a user, delete after 14 days
+    rules:
+      low_rated: 30 # Delete after 30 days if rated below rating.rules.low
+  rating:
+    users:
+      admin: 5 # Never delete media which was added by an admin and rated at least 2.5 stars..
+      user: 5 # Not currently used.
+    rules:
+      low: 3 # Anything rated 1.5 stars
