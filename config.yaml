@@ -1,0 +1,13 @@
+deletion_threshold:
+  days:
+    users:
+      admin: 365 # One year threshold for movies added / requested by an Admin
+      user: 14 # Two week threshold for movies added / requested by a User
+    rules:
+      low_rated: 30 # 30 days threshold for movies with a low rating
+  rating:
+    users:
+      admin: 5  # Admin users who rate movies <= 2.5 Stars will be in-scope for deletion
+      user: 5  # User users who rate movies <= 2.5 Stars will be in-scope for deletion
+    rules:
+      low: 3  # Movies with a rating <= 1.5 Stars will be in-scope for deletion within rules.low_rated days
