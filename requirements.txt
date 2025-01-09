@@ -1,0 +1,8 @@
+requests
+plexapi
+python-dotenv
+pyyaml
+pytest
+pytest-cov
+tqdm
+bs4
