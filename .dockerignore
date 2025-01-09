@@ -3,7 +3,7 @@ venv/
 output/
 .dockerignore
 Dockerfile
-config.yaml
+.env
 plex.py
 *.tar.gz
 *.bak

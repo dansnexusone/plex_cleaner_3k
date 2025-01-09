@@ -16,6 +16,7 @@ COPY --from=build-env /usr/local/lib/python3.12/site-packages /usr/local/lib/pyt
 COPY --from=build-env /usr/local/bin/ /usr/local/bin/
 
 COPY *.py /app/
+COPY config.yaml /app/
 COPY models/ /app/models/
 COPY services/ /app/services/
 
