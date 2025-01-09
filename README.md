@@ -1,4 +1,5 @@
 
+
 ## Overview
 
 plex_cleaner_3k is an automated solution for managing your Plex movie library by intelligently cleaning up movies based on watch history, ratings, and custom retention rules. It integrates with Radarr, Overseerr, and Tautulli to make informed decisions about which content to keep or remove.
@@ -40,11 +41,13 @@ git clone https://github.com/yourusername/plex_cleaner_3k.git
 cd plex_cleaner_3k
 ```
 
-2. Build and run with Docker:
+2. Create configuration files (see Configuration section)
+
+3. Build and run with Docker:
 
 ```bash
 docker build -t plex-cleaner .
-docker run -v $(pwd)/config.yaml:/app/config.yaml plex-cleaner
+docker run -v $(pwd)/config.yaml:/app/config.yaml --env-file .env plex-cleaner
 ```
 
 ### Option 2: Manual Installation
@@ -66,30 +69,44 @@ pip install -r requirements.txt
 
 ## Configuration
 
+The application uses two configuration files:
+
+1. `config.yaml` for general settings
+2. `.env` for sensitive information (API keys, passwords)
+
+### Environment Variables (.env)
+
+Create a `.env` file in the project root:
+
+```bash
+PLEX_TOKEN=your-plex-token
+TAUTULLI_API_KEY=your-tautulli-api-key
+RADARR_4K_API_KEY=your-radarr-4k-api-key
+RADARR_1080P_API_KEY=your-radarr-hd-api-key
+OVERSEERR_API_KEY=your-overseerr-api-key
+OVERSEERR_PASSWORD=your-overseerr-password
+```
+
+### Configuration File (config.yaml)
+
 Create a `config.yaml` file:
 
 ```yaml
 plex:
   url: "http://plex.local:32400"
-  token: "your-plex-token"
 
 tautulli:
   url: "http://tautulli.local:8181"
-  api_key: "your-tautulli-api-key"
 
 radarr:
   4k:
     url: "http://radarr-4k.local:7878"
-    api_key: "your-radarr-4k-api-key"
   1080p:
     url: "http://radarr-hd.local:7878"
-    api_key: "your-radarr-hd-api-key"
 
 overseerr:
   url: "http://overseerr.local:5055"
-  api_key: "your-overseerr-api-key"
   email: "your-email@domain.com"
-  password: "your-password"
 
 admin_emails:
   - "admin1@domain.com"
@@ -104,10 +121,10 @@ deletion_threshold:
       low_rated: 30  # Remove low-rated content after 1 month
   rating:
     users:
-      admin: 5.0  # Admin rating threshold
-      user: 3.0   # User rating threshold
+      admin: 5  # Admin rating threshold
+      user: 5   # User rating threshold
     rules:
-      low: 2.5    # Low rating threshold
+      low: 3    # Low rating threshold
 ```
 
 ## Usage
@@ -132,10 +149,10 @@ python main.py --dry-run
 
 ```bash
 # Normal run
-docker run -v $(pwd)/config.yaml:/app/config.yaml plex-cleaner
+docker run -v $(pwd)/config.yaml:/app/config.yaml --env-file .env plex-cleaner
 
 # Dry run
-docker run -v $(pwd)/config.yaml:/app/config.yaml plex-cleaner --dry-run
+docker run -v $(pwd)/config.yaml:/app/config.yaml --env-file .env plex-cleaner --dry-run
 ```
 
 ## How It Works
@@ -171,12 +188,20 @@ plex_cleaner_3k/
 │   ├── overseerr.py       # Overseerr integration
 │   ├── radarr.py         # Radarr API client
 │   └── tautulli.py       # Tautulli integration
-├── config.yaml               # YAML configuration file
-├── main.py               # CLI entry point
-├── movie_cleaner.py      # Core cleaning logic
-├── requirements.txt      # Python dependencies
-└── Dockerfile           # Container definition
+├── .env                   # Environment variables (secrets)
+├── config.yaml           # YAML configuration file
+├── main.py              # CLI entry point
+├── movie_cleaner.py     # Core cleaning logic
+├── requirements.txt     # Python dependencies
+└── Dockerfile          # Container definition
 ```
+
+## Security Notes
+
+- Never commit your `.env` file to version control
+- The `.env` file is included in `.gitignore` by default
+- When using Docker, pass environment variables using the `--env-file` flag
+- For production deployments, consider using a secrets management solution
 
 ## Contributing
 
