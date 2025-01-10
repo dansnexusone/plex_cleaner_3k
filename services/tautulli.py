@@ -3,11 +3,13 @@ from typing import Optional
 
 import requests
 
+from models.config import TautulliConfig
+
 
 class TautulliService:
-    def __init__(self, config):
-        self.base_url = config.tautulli_url
-        self.api_key = config.tautulli_api_key
+    def __init__(self, tautulli_config: TautulliConfig):
+        self.base_url = tautulli_config.url
+        self.api_key = tautulli_config.api_key
 
     def get_last_watched(self, rating_key: str) -> Optional[datetime]:
         """Get the last watched date for any user for the given rating key."""
