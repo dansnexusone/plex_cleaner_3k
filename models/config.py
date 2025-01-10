@@ -2,6 +2,24 @@ from dataclasses import dataclass, field
 
 
 @dataclass
+class PlexConfig:
+    url: str
+    token: str
+
+
+@dataclass
+class TautulliConfig:
+    url: str
+    api_key: str
+
+
+@dataclass
+class SonarrConfig:
+    url: str
+    api_key: str
+
+
+@dataclass
 class RadarrConfig:
     url: str
     api_key: str
@@ -22,17 +40,21 @@ class RatingThreshold:
 
 
 @dataclass
+class OverseerrConfig:
+    url: str
+    api_key: str
+    email: str
+    password: str
+    admin_emails: list[str] = field(default_factory=list)
+
+
+@dataclass
 class Config:
-    plex_url: str
-    plex_token: str
-    tautulli_url: str
-    tautulli_api_key: str
+    plex: PlexConfig
+    tautulli: TautulliConfig
     radarr_uhd: RadarrConfig
     radarr_streaming: RadarrConfig
-    overseerr_url: str
-    overseerr_api_key: str
-    overseerr_email: str
-    overseerr_password: str
+    overseerr: OverseerrConfig
     days_threshold: DaysThreshold
     rating_threshold: RatingThreshold
     admin_emails: list[str] = field(default_factory=list)
