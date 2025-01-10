@@ -4,7 +4,15 @@ from pathlib import Path
 import dotenv
 import yaml
 
-from models.config import Config, DaysThreshold, RadarrConfig, RatingThreshold
+from models.config import (
+    Config,
+    DaysThreshold,
+    OverseerrConfig,
+    PlexConfig,
+    RadarrConfig,
+    RatingThreshold,
+    TautulliConfig,
+)
 
 
 class ConfigManager:
@@ -59,30 +67,34 @@ class ConfigManager:
 
             for key in ("plex", "tautulli", "overseerr") + self._find_radarr_instances():
                 for field in ["url", "api_key" if key != "plex" else "token"] + (
-                    ["email", "password"] if key == "overseerr" else []
+                    ["email", "password", "admin_emails"] if key == "overseerr" else []
                 ):
                     if os.getenv(f"{key.upper()}_{field.upper()}"):
                         data.setdefault(key, {})
                         data[key][field] = os.getenv(f"{key.upper()}_{field.upper()}")
 
-            data["admin_emails"] = os.getenv("ADMIN_EMAILS", "").split(",")
-
         return Config(
-            plex_url=data["plex"]["url"],
-            plex_token=data["plex"]["token"],
-            tautulli_url=data["tautulli"]["url"],
-            tautulli_api_key=data["tautulli"]["api_key"],
+            plex=PlexConfig(
+                url=data["plex"]["url"],
+                token=data["plex"]["token"],
+            ),
+            tautulli=TautulliConfig(
+                url=data["tautulli"]["url"],
+                api_key=data["tautulli"]["api_key"],
+            ),
             radarr_uhd=RadarrConfig(
                 url=data["radarr_4k"]["url"], api_key=data["radarr_4k"]["api_key"]
             ),
             radarr_streaming=RadarrConfig(
                 url=data["radarr_1080p"]["url"], api_key=data["radarr_1080p"]["api_key"]
             ),
-            overseerr_url=data["overseerr"]["url"],
-            overseerr_api_key=data["overseerr"]["api_key"],
-            overseerr_email=data["overseerr"]["email"],
-            overseerr_password=data["overseerr"]["password"],
-            admin_emails=data["admin_emails"],
+            overseerr=OverseerrConfig(
+                url=data["overseerr"]["url"],
+                api_key=data["overseerr"]["api_key"],
+                email=data["overseerr"]["email"],
+                password=data["overseerr"]["password"],
+                admin_emails=data["overseerr"]["admin_emails"],
+            ),
             days_threshold=DaysThreshold(
                 admin=data["deletion_threshold"]["days"]["users"]["admin"],
                 user=data["deletion_threshold"]["days"]["users"]["user"],
