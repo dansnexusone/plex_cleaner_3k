@@ -33,11 +33,15 @@ class MovieCleaner:
     def __init__(self):
         """Initialize MovieCleaner with necessary service connections."""
         self.config = ConfigManager().config
-        self.overseerr = OverseerrService(self.config)
+
+        # Set up Plex First
+        self.plex = PlexServer(self.config.plex.url, self.config.plex.token)
+
+        # Set up local services
+        self.overseerr = OverseerrService(self.config.overseerr)
         self.radarr_uhd = RadarrService(self.config.radarr_uhd)
         self.radarr_streaming = RadarrService(self.config.radarr_streaming)
-        self.plex = PlexServer(self.config.plex_url, self.config.plex_token)
-        self.tautulli = TautulliService(self.config)
+        self.tautulli = TautulliService(self.config.tautulli)
 
         self.overseerr_requests = self.overseerr.get_all_requests()
         self.imdb_top_250 = self.scrape_imdb_top_250()
@@ -234,7 +238,7 @@ class MovieCleaner:
             # Check if non-admin requested the movie
             is_admin_request = (
                 not movie_info.requested_by
-                or movie_info.requested_by.lower() in self.config.admin_emails
+                or movie_info.requested_by.lower() in self.config.overseerr.admin_emails
             )
             return (
                 self.config.days_threshold.admin
