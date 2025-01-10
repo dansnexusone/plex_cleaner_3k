@@ -85,6 +85,28 @@ RADARR_4K_API_KEY=your-radarr-4k-api-key
 RADARR_1080P_API_KEY=your-radarr-hd-api-key
 OVERSEERR_API_KEY=your-overseerr-api-key
 OVERSEERR_PASSWORD=your-overseerr-password
+
+# TAUTULLI 
+TAUTULLI_URL=your-tautulli-url
+TAUTULLI_API_KEY=your-tautulli-api-key
+
+# PLEX
+PLEX_URL=your-plex-url
+PLEX_TOKEN=your-plex-token
+
+# RADARR
+RADARR_INSTANCES=4k,1080p # Optional if you have more than one Radarr instance
+RADARR_4K_URL=your-radarr-4k-url
+RADARR_4K_API_KEY=your-radarr-4k-api-key
+RADARR_1080P_URL=your-radarr-1080p-url
+RADARR_1080P_API_KEY=your-radarr-1080p-api-key
+
+# OVERSEERR
+OVERSEERR_URL=your-overseerr-url
+OVERSEERR_API_KEY=your-overseerr-api-key
+OVERSEERR_EMAIL=your-overseerr-admin-email
+OVERSEERR_PASSWORD=your-overseerr-admin-password
+OVERSEERR_ADMIN_EMAILS=your-admin-email-address-1,your-admin-email-address-2,...
 ```
 
 ### Configuration File (config.yaml)
@@ -92,26 +114,6 @@ OVERSEERR_PASSWORD=your-overseerr-password
 Create a `config.yaml` file:
 
 ```yaml
-plex:
-  url: "http://plex.local:32400"
-
-tautulli:
-  url: "http://tautulli.local:8181"
-
-radarr:
-  4k:
-    url: "http://radarr-4k.local:7878"
-  1080p:
-    url: "http://radarr-hd.local:7878"
-
-overseerr:
-  url: "http://overseerr.local:5055"
-  email: "your-email@domain.com"
-
-admin_emails:
-  - "admin1@domain.com"
-  - "admin2@domain.com"
-
 deletion_threshold:
   days:
     users:
