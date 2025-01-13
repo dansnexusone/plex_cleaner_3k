@@ -1,4 +1,5 @@
 from dataclasses import dataclass, field
+from typing import List
 
 
 @dataclass
@@ -52,8 +53,7 @@ class OverseerrConfig:
 class Config:
     plex: PlexConfig
     tautulli: TautulliConfig
-    radarr_uhd: RadarrConfig
-    radarr_streaming: RadarrConfig
+    radarr: List[RadarrConfig]
     overseerr: OverseerrConfig
     days_threshold: DaysThreshold
     rating_threshold: RatingThreshold
