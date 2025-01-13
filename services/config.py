@@ -1,7 +1,8 @@
+import os
 from pathlib import Path
 
 import yaml
-from dotenv import dotenv_values
+from dotenv import load_dotenv
 
 from models.config import (
     Config,
@@ -19,7 +20,7 @@ class ConfigManager:
         self.config_path = Path(config_path)
 
         # Load .env
-        self.dotenv = dotenv_values(".env")
+        load_dotenv()
 
         # Load config.yaml
         self.config = self._load_config()
@@ -44,7 +45,7 @@ class ConfigManager:
 
         # Get all environment variables starting with radarr or sonarr
         arr_instances = set()
-        for key in self.dotenv:
+        for key in os.environ:
             if key.lower().startswith(("radarr", "sonarr")):
                 # Split the env var name into parts
                 parts = key.lower().split("_")
@@ -97,9 +98,9 @@ class ConfigManager:
 
             for key in fields.keys():
                 for field in fields[key]:
-                    if self.dotenv.get(f"{key.upper()}_{field.upper()}"):
+                    if var := os.environ.get(f"{key.upper()}_{field.upper()}"):
                         data.setdefault(key, {})
-                        data[key][field] = self.dotenv.get(f"{key.upper()}_{field.upper()}")
+                        data[key][field] = var
 
         return Config(
             plex=PlexConfig(
