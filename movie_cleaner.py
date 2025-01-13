@@ -37,11 +37,14 @@ class MovieCleaner:
         # Set up Plex First
         self.plex = PlexServer(self.config.plex.url, self.config.plex.token)
 
-        # Set up local services
-        self.overseerr = OverseerrService(self.config.overseerr)
-        self.radarr_uhd = RadarrService(self.config.radarr_uhd)
-        self.radarr_streaming = RadarrService(self.config.radarr_streaming)
+        # Set up Radarr Instances
+        self.radarr_instances = [RadarrService(instance) for instance in self.config.radarr]
+
+        # Set up Tautulli
         self.tautulli = TautulliService(self.config.tautulli)
+
+        # Set up Overseerr
+        self.overseerr = OverseerrService(self.config.overseerr)
 
         self.overseerr_requests = self.overseerr.get_all_requests()
         self.imdb_top_250 = self.scrape_imdb_top_250()
@@ -50,36 +53,38 @@ class MovieCleaner:
         self.upcoming_movies = []
 
     def get_combined_movies(self) -> dict[str, list[dict]]:
-        """Get combined movie data from both UHD and HD Radarr instances.
+        """Get combined movie data from all configured Radarr instances.
 
-        This method fetches movies from both UHD and HD Radarr instances and combines them
+        This method fetches movies from all configured Radarr instances and combines them
         into a single dictionary keyed by TMDB ID. Only movies that have associated files
-        are included.
+        are included in the results.
+
+        Each movie entry is augmented with its source Radarr instance to enable operations
+        like deletion to be performed on the correct instance.
 
         Returns:
             dict[str, list[dict]]: A dictionary where:
                 - key (str): TMDB ID of the movie
-                - value (list[dict]): List of movie dictionaries containing movie data from Radarr,
-                                     with an additional 'type' field indicating 'uhd' or 'hd'
+                - value (list[dict]): List of movie dictionaries containing:
+                    - All original movie data from Radarr
+                    - An 'instance' field containing the RadarrService instance
 
         Example structure:
             {
                 "12345": [
-                    {"type": "uhd", "tmdbId": 12345, ...},
-                    {"type": "hd", "tmdbId": 12345, ...}
+                    {"instance": <RadarrService>, "tmdbId": 12345, "title": "Movie 1", ...},
+                    {"instance": <RadarrService>, "tmdbId": 12345, "title": "Movie 1", ...}
                 ]
             }
         """
         combined_movies = {}
-        for radarr_type, function in zip(
-            ["uhd", "hd"], [self.radarr_uhd.get_movies, self.radarr_streaming.get_movies]
-        ):
-            movies = function()
+        for instance in self.radarr_instances:
+            movies = instance.get_movies()
             for movie in movies:
                 if not movie["hasFile"]:
                     continue
 
-                movie = {"type": radarr_type, **movie}
+                movie = {"instance": instance, **movie}
 
                 tmdbid = str(movie["tmdbId"])
                 if tmdbid not in combined_movies:
@@ -385,12 +390,31 @@ class MovieCleaner:
         return self._is_expired(movie.expires_at)
 
     def _delete_movies(self, movies: List[str], dry_run: bool = False) -> None:
-        """
-        Delete movies from both UHD and streaming Radarr instances.
+        """Delete movies from all configured Radarr instances.
+
+        This method takes a list of TMDB IDs and deletes the corresponding movies from all
+        Radarr instances where they exist. It supports a dry run mode for testing purposes.
+
+        For each movie:
+        1. Looks up the movie details in the combined_movies dictionary using TMDB ID
+        2. Logs the deletion attempt
+        3. If not a dry run, attempts deletion from each Radarr instance that has the movie
+        4. Logs success of each deletion
 
         Args:
-            movies: List of MovieInfo objects to delete
-            dry_run: If True, simulate deletion without actually deleting
+            movies: List of TMDB IDs (as strings) for movies to delete
+            dry_run: If True, only logs what would be deleted without actually deleting.
+                    Defaults to False.
+
+        Returns:
+            None
+
+        Example:
+            # Delete movies with TMDB IDs "12345" and "67890"
+            cleaner._delete_movies(["12345", "67890"])
+
+            # Dry run to see what would be deleted
+            cleaner._delete_movies(["12345", "67890"], dry_run=True)
         """
         for movie in movies:
             movie = self.combined_movies[movie]
@@ -400,10 +424,8 @@ class MovieCleaner:
             if dry_run:
                 continue
 
-            deletion_methods = {"uhd": self.radarr_uhd, "hd": self.radarr_streaming}
-
             for m in movie:
-                if deletion_methods[m["type"]].delete_movie(m["id"]):
+                if m["instance"].delete_movie(m["id"]):
                     logger.info("Done!")
 
     def _log_statistics(self, deleted: List[MovieInfo], total: int) -> None:
