@@ -94,7 +94,7 @@ class ConfigManager:
             }
 
             for arr_instance in self._find_arr_instances():
-                fields[arr_instance] = ["url", "api_key", "primary"]
+                fields[arr_instance] = ["url", "api_key"]
 
             for key in fields.keys():
                 for field in fields[key]:
