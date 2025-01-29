@@ -129,7 +129,7 @@ class MovieCleaner:
         self._log_statistics(movies_to_delete, len(self.combined_movies))
         self._delete_movies(movies_to_delete, dry_run)
 
-    def _process_movies(self) -> List[MovieInfo]:
+    def _process_movies(self) -> List[str]:
         """Process the list of Radarr movies in parallel."""
 
         # Partial function to avoid passing self and overseerr_requests repeatedly
@@ -151,7 +151,25 @@ class MovieCleaner:
         return [tmdb_id for tmdb_id in results if tmdb_id]
 
     def _process_single_movie(self, movie_item: tuple) -> Optional[str]:
-        """Process a single movie and return its TMDb ID if it should be deleted."""
+        """Process a single movie and determine if it should be deleted.
+
+        This method takes a movie item tuple containing the TMDb ID and movie data,
+        retrieves additional movie information, and evaluates whether the movie
+        should be deleted based on configured criteria.
+
+        Args:
+            movie_item: A tuple containing:
+                - TMDb ID (str): The TMDb ID of the movie
+                - movie (tuple): Tuple containing the movie data from Radarr
+
+        Returns:
+            Optional[str]: The TMDb ID of the movie if it should be deleted,
+                         None if the movie should be kept or if an error occurred
+
+        Raises:
+            NotFound: If the movie cannot be found when retrieving additional info
+            Exception: For any other errors that occur during processing
+        """
         tmdb_id, movie = movie_item
 
         if not tmdb_id:
