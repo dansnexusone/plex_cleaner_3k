@@ -1,30 +1,25 @@
 import functools
-import html
-import json
 import logging
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import fields
 from datetime import datetime, timedelta
-from typing import List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
-import requests
-import urllib3
-from bs4 import BeautifulSoup
 from plexapi.exceptions import NotFound
 from plexapi.server import PlexServer
 from tqdm import tqdm
 
 from models.external_rating import ExternalRating
 from models.movie_info import MovieInfo
+from models.retention_decision import RetentionDecision, RetentionReason
+from services.audit import AuditLog
 from services.config import ConfigManager
 from services.overseerr import OverseerrService
 from services.radarr import RadarrService
+from services.summary import SummaryWriter
 from services.tautulli import TautulliService
 
 logger = logging.getLogger(__name__)
-
-# Disable SSL warnings
-urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 
 class MovieCleaner:
@@ -46,8 +41,13 @@ class MovieCleaner:
         # Set up Overseerr
         self.overseerr = OverseerrService(self.config.overseerr)
 
+        # Set up the audit trail and human-readable summary
+        self.audit = AuditLog(self.config.audit.log_path)
+        self.summary = SummaryWriter(
+            self.config.audit.summary_path, self.config.audit.expiring_soon_days
+        )
+
         self.overseerr_requests = self.overseerr.get_all_requests()
-        self.imdb_top_250 = self.scrape_imdb_top_250()
 
         self.combined_movies = self.get_combined_movies()
         self.upcoming_movies = []
@@ -126,10 +126,13 @@ class MovieCleaner:
         logger.info(f"Found {len(self.combined_movies)} movies to review from Radarr.")
         movies_to_delete = self._process_movies()
 
+        self._record_expiring()
         self._log_statistics(movies_to_delete, len(self.combined_movies))
-        self._delete_movies(movies_to_delete, dry_run)
 
-    def _process_movies(self) -> List[str]:
+        bytes_freed = self._delete_movies(movies_to_delete, dry_run)
+        self.summary.write(self.upcoming_movies, len(movies_to_delete), bytes_freed, dry_run)
+
+    def _process_movies(self) -> List[MovieInfo]:
         """Process the list of Radarr movies in parallel."""
 
         # Partial function to avoid passing self and overseerr_requests repeatedly
@@ -147,10 +150,10 @@ class MovieCleaner:
                 )
             )
 
-        # Filter out None results and combine valid TMDb IDs
-        return [tmdb_id for tmdb_id in results if tmdb_id]
+        # Keep only the movies that should be deleted
+        return [movie_info for movie_info in results if movie_info]
 
-    def _process_single_movie(self, movie_item: tuple) -> Optional[str]:
+    def _process_single_movie(self, movie_item: Tuple[str, List[dict]]) -> Optional[MovieInfo]:
         """Process a single movie and determine if it should be deleted.
 
         This method takes a movie item tuple containing the TMDb ID and movie data,
@@ -160,11 +163,11 @@ class MovieCleaner:
         Args:
             movie_item: A tuple containing:
                 - TMDb ID (str): The TMDb ID of the movie
-                - movie (tuple): Tuple containing the movie data from Radarr
+                - movie (list): List of movie data dictionaries from Radarr
 
         Returns:
-            Optional[str]: The TMDb ID of the movie if it should be deleted,
-                         None if the movie should be kept or if an error occurred
+            Optional[MovieInfo]: The MovieInfo (carrying its retention decision) if the
+                movie should be deleted, None if it should be kept or an error occurred.
 
         Raises:
             NotFound: If the movie cannot be found when retrieving additional info
@@ -178,7 +181,7 @@ class MovieCleaner:
         try:
             movie_info = self._get_movie_info(movie[0], tmdb_id)
             if self._should_delete_movie(movie_info):
-                return tmdb_id
+                return movie_info
         except NotFound:
             pass
         except Exception as e:
@@ -186,126 +189,107 @@ class MovieCleaner:
 
         return None
 
-    def _determine_average_external_rating(self, movie_info: MovieInfo) -> float:
-        """Determine the average external rating for a movie."""
-        ratings = []
+    def _determine_average_external_rating(self, movie_info: MovieInfo) -> Optional[float]:
+        """Determine the average external rating for a movie, or None if it has none."""
+        ratings = [
+            value
+            for field in fields(movie_info.external_ratings)
+            if (value := getattr(movie_info.external_ratings, field.name))
+        ]
 
-        for field in fields(movie_info.external_ratings):
-            if getattr(movie_info.external_ratings, field.name):
-                ratings.append(getattr(movie_info.external_ratings, field.name, None))
+        if not ratings:
+            return None
 
         return round(sum(ratings) / len(ratings), 1)
 
-    def scrape_imdb_top_250(self) -> List[str]:
-        """
-        Scrape the IMDB Top 250 list and return the titles.
-        """
-
-        try:
-            # Get the IMDB Top 250 page
-            response = requests.get(
-                "https://www.imdb.com/chart/top",
-                headers={
-                    "User-Agent": "Mozilla/5.0",
-                },
-                verify=False,
-            )
-            response.raise_for_status()
-
-            # Parse the HTML
-            soup = BeautifulSoup(response.text, "html.parser")
-
-            # Find all movie titles in the Top 250
-            top_250 = json.loads(
-                "".join(soup.find("script", {"type": "application/ld+json"}).contents)
-            )
-
-            return [html.unescape(x["item"]["name"]) for x in top_250["itemListElement"]]
-
-        except Exception as e:
-            logger.error(f"Error retrieving IMDB Top 250: {e}")
-            return []
-
-    def _is_imdb_top_250(self, movie_info: MovieInfo) -> bool:
-        """
-        Check if a movie is currently in the IMDB Top 250 list by scraping the IMDB website.
+    def _decision_inputs(self, movie_info: MovieInfo) -> Dict[str, Any]:
+        """Capture the signals that drive a retention decision, for auditing.
 
         Args:
             movie_info: MovieInfo object containing movie details
 
         Returns:
-            bool: True if movie is in IMDB Top 250, False otherwise
+            Dict[str, Any]: Snapshot of the rating, watch, and request signals.
         """
+        requested_by = movie_info.requested_by
+        is_admin_request = (
+            not requested_by or requested_by.lower() in self.config.overseerr.admin_emails
+        )
 
-        return movie_info.title in self.imdb_top_250
+        return {
+            "user_rating": movie_info.user_rating,
+            "imdb_rating": movie_info.external_ratings.imdb,
+            "avg_external_rating": self._determine_average_external_rating(movie_info),
+            "last_watched": movie_info.last_watched,
+            "added_at": movie_info.added_at,
+            "requested_by": requested_by,
+            "is_admin_request": is_admin_request,
+        }
 
-    def _determine_retention_days(self, movie_info: MovieInfo) -> int:
+    def _retention_window(
+        self, movie_info: MovieInfo, inputs: Dict[str, Any]
+    ) -> Tuple[RetentionReason, int]:
+        """Determine the retention window for a non-protected movie.
+
+        Once a user has rated a movie, their own rating decides retention; the
+        external rating only ever protects (handled in _evaluate_retention) and
+        never shortens the window. Unrated movies get a watch window based on
+        whether an admin or a regular user requested them.
+
+        Args:
+            movie_info: MovieInfo object containing movie details
+            inputs: Decision-input snapshot from _decision_inputs
+
+        Returns:
+            Tuple[RetentionReason, int]: The reason code and retention days.
         """
-        Determine how many days to retain a movie based on various criteria.
+        rating_threshold = self.config.rating_threshold
+        days_threshold = self.config.days_threshold
+
+        if movie_info.user_rating:
+            if movie_info.user_rating <= rating_threshold.low_rating:
+                return RetentionReason.LOW_USER_RATING, days_threshold.low_rating
+            return RetentionReason.MEH_USER_RATING, days_threshold.mid
+
+        if inputs["is_admin_request"]:
+            return RetentionReason.UNRATED_ADMIN, days_threshold.admin
+        return RetentionReason.UNRATED_USER, days_threshold.user
+
+    def _evaluate_retention(self, movie_info: MovieInfo) -> RetentionDecision:
+        """Evaluate a movie against the retention policy.
+
+        Protections (a high user rating, a high IMDB rating, or a high average
+        external rating) keep a movie forever. Otherwise the movie is assigned
+        a retention window and an expiry date measured from its last activity.
 
         Args:
             movie_info: MovieInfo object containing movie details
 
         Returns:
-            Number of days to retain the movie
+            RetentionDecision: The reason, expiry date, retention days, and the
+                inputs that drove the outcome.
         """
-        # If user rated the movie and rating is below low rating threshold
-        if (
-            movie_info.user_rating
-            and movie_info.user_rating <= self.config.rating_threshold.low_rating
-        ):
-            return self.config.days_threshold.low_rating
+        inputs = self._decision_inputs(movie_info)
+        rating_threshold = self.config.rating_threshold
 
-        # If no user rating or external rating is low
-        if not movie_info.user_rating or self._determine_average_external_rating(movie_info) < 3.5:
-            # Check if non-admin requested the movie
-            is_admin_request = (
-                not movie_info.requested_by
-                or movie_info.requested_by.lower() in self.config.overseerr.admin_emails
-            )
-            return (
-                self.config.days_threshold.admin
-                if is_admin_request
-                else self.config.days_threshold.user
+        if movie_info.user_rating and movie_info.user_rating >= rating_threshold.admin:
+            return RetentionDecision(RetentionReason.PROTECTED_USER_RATING, None, None, inputs)
+
+        imdb_rating = inputs["imdb_rating"]
+        if imdb_rating is not None and imdb_rating >= rating_threshold.imdb_protect:
+            return RetentionDecision(RetentionReason.PROTECTED_HIGH_IMDB_RATING, None, None, inputs)
+
+        avg_external = inputs["avg_external_rating"]
+        if avg_external is not None and avg_external >= 8:
+            return RetentionDecision(
+                RetentionReason.PROTECTED_HIGH_EXTERNAL_RATING, None, None, inputs
             )
 
-        return self.config.days_threshold.low_rating
-
-    def _calculate_expiry_date(
-        self,
-        movie_info: MovieInfo,
-    ) -> Optional[datetime]:
-        """
-        Calculate the expiry date for a movie based on the user type and watch history.
-
-        Args:
-            non_admin_request: Whether the movie was requested by a user vs an admin
-            added_at: Datetime the movie was added to Plex
-            last_watched: Datetime the movie was last watched
-
-        Returns:
-            Datetime when the movie will expire
-        """
-        # Movies with rating >= 2.5 stars (5/10) never expire
-        # Check user rating first
-        if movie_info.user_rating and movie_info.user_rating >= self.config.rating_threshold.admin:
-            return None
-
-        # Avoid deleting movies in the IMDB Top 250
-        if self._is_imdb_top_250(movie_info):
-            return None
-
-        # Avoid deleting movies with high ratings from external sources (IMDB, Rotten Tomatoes, etc.)
-        if self._determine_average_external_rating(movie_info) >= 8:
-            return None
-
-        # Use the most recent activity date
+        reason, retention_days = self._retention_window(movie_info, inputs)
         last_activity = movie_info.last_watched or movie_info.added_at
+        expires_at = last_activity + timedelta(days=retention_days)
 
-        # Determine the retention days based on the user type and watch history
-        retention_days = self._determine_retention_days(movie_info)
-
-        return last_activity + timedelta(days=retention_days)
+        return RetentionDecision(reason, expires_at, retention_days, inputs)
 
     def _is_expired(self, expires_at: Optional[datetime]) -> bool:
         """
@@ -364,10 +348,11 @@ class MovieCleaner:
             user_rating=plex_movie.userRating,
         )
 
-        # Calculate the expiry date for this movie
-        movie_info.expires_at = self._calculate_expiry_date(movie_info)
+        # Evaluate retention and record the resulting decision on the movie
+        movie_info.decision = self._evaluate_retention(movie_info)
+        movie_info.expires_at = movie_info.decision.expires_at
 
-        if self._will_expire_soon(movie_info.expires_at):
+        if self._will_expire_soon(movie_info.expires_at, self.config.audit.expiring_soon_days):
             self.upcoming_movies.append(movie_info)
 
             tqdm.write(
@@ -377,7 +362,7 @@ class MovieCleaner:
                 f"Last Watched: {movie_info.last_watched}, "
                 f"Added: {movie_info.added_at}, "
                 f"Rating: {movie_info.user_rating}, "
-                f"Avg External Rating: {self._determine_average_external_rating(movie_info)}"
+                f"Avg External Rating: {movie_info.decision.inputs['avg_external_rating']}"
             )
 
         return movie_info
@@ -400,51 +385,62 @@ class MovieCleaner:
 
         Args:
             movie: MovieInfo object to evaluate
-            is_requested: Whether the movie was requested through Overseerr
 
         Returns:
             True if movie should be deleted, False if it should be kept
         """
         return self._is_expired(movie.expires_at)
 
-    def _delete_movies(self, movies: List[str], dry_run: bool = False) -> None:
-        """Delete movies from all configured Radarr instances.
+    def _record_expiring(self) -> None:
+        """Write audit events for every movie that will expire soon."""
+        for movie_info in self.upcoming_movies:
+            self.audit.record_expiring(movie_info, movie_info.decision)
 
-        This method takes a list of TMDB IDs and deletes the corresponding movies from all
-        Radarr instances where they exist. It supports a dry run mode for testing purposes.
+    def _delete_movies(self, movies: List[MovieInfo], dry_run: bool = False) -> int:
+        """Delete movies from all configured Radarr instances and audit each deletion.
 
-        For each movie:
-        1. Looks up the movie details in the combined_movies dictionary using TMDB ID
-        2. Logs the deletion attempt
-        3. If not a dry run, attempts deletion from each Radarr instance that has the movie
-        4. Logs success of each deletion
+        For each movie this looks up its per-instance entries in combined_movies, logs the
+        deletion attempt, deletes from each instance that has the movie (unless this is a dry
+        run), and appends an audit event capturing the freed space, instances, and the reason
+        the movie was scheduled for deletion.
 
         Args:
-            movies: List of TMDB IDs (as strings) for movies to delete
-            dry_run: If True, only logs what would be deleted without actually deleting.
-                    Defaults to False.
+            movies: MovieInfo objects (each carrying its retention decision) to delete.
+            dry_run: If True, only logs and audits what would be deleted. Defaults to False.
 
         Returns:
-            None
-
-        Example:
-            # Delete movies with TMDB IDs "12345" and "67890"
-            cleaner._delete_movies(["12345", "67890"])
-
-            # Dry run to see what would be deleted
-            cleaner._delete_movies(["12345", "67890"], dry_run=True)
+            int: Total bytes freed (or that would be freed, in a dry run).
         """
-        for movie in movies:
-            movie = self.combined_movies[movie]
+        total_freed = 0
+
+        for movie_info in movies:
+            entries = self.combined_movies[str(movie_info.tmdb_id)]
             action = "Would delete" if dry_run else "Attempting to delete"
-            logger.info(f"{action} {movie[0]['title']}...")
+            logger.info(f"{action} {movie_info.title}...")
 
             if dry_run:
+                size = sum(entry.get("sizeOnDisk", 0) for entry in entries)
+                instances = [entry["instance"].config.name for entry in entries]
+                total_freed += size
+                self.audit.record_deletion(
+                    movie_info, movie_info.decision, instances, size, dry_run=True
+                )
                 continue
 
-            for m in movie:
-                if m["instance"].delete_movie(m["id"]):
+            freed = 0
+            deleted_instances = []
+            for entry in entries:
+                if entry["instance"].delete_movie(entry["id"]):
+                    freed += entry.get("sizeOnDisk", 0)
+                    deleted_instances.append(entry["instance"].config.name)
                     logger.info("Done!")
+
+            total_freed += freed
+            self.audit.record_deletion(
+                movie_info, movie_info.decision, deleted_instances, freed, dry_run=False
+            )
+
+        return total_freed
 
     def _log_statistics(self, deleted: List[MovieInfo], total: int) -> None:
         """
