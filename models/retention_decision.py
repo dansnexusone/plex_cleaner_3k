@@ -8,7 +8,7 @@ class RetentionReason(str, Enum):
     """Reason codes explaining why a movie is protected, retained, or expiring."""
 
     PROTECTED_USER_RATING = "protected_user_rating"
-    PROTECTED_IMDB_TOP_250 = "protected_imdb_top_250"
+    PROTECTED_HIGH_IMDB_RATING = "protected_high_imdb_rating"
     PROTECTED_HIGH_EXTERNAL_RATING = "protected_high_external_rating"
     LOW_USER_RATING = "low_user_rating"
     MEH_USER_RATING = "meh_user_rating"

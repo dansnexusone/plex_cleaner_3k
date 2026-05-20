@@ -40,6 +40,7 @@ class RatingThreshold:
     admin: int
     user: int
     low_rating: int
+    imdb_protect: float = 8.0
 
 
 @dataclass

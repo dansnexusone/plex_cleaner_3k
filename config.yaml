@@ -12,6 +12,7 @@ deletion_threshold:
       user: 5
     rules:
       low: 3 # Movies rated <= 1.5 Stars use the low_rated window
+      imdb_protect: 8.0 # Movies with an IMDB rating >= this are protected from deletion
 
 audit:
   log_path: output/deletions.jsonl # Append-only JSONL trail of deletions and expiring-soon events

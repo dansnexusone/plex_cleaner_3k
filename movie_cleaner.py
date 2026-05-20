@@ -1,15 +1,10 @@
 import functools
-import html
-import json
 import logging
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import fields
 from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional, Tuple
 
-import requests
-import urllib3
-from bs4 import BeautifulSoup
 from plexapi.exceptions import NotFound
 from plexapi.server import PlexServer
 from tqdm import tqdm
@@ -25,9 +20,6 @@ from services.summary import SummaryWriter
 from services.tautulli import TautulliService
 
 logger = logging.getLogger(__name__)
-
-# Disable SSL warnings
-urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 
 class MovieCleaner:
@@ -56,7 +48,6 @@ class MovieCleaner:
         )
 
         self.overseerr_requests = self.overseerr.get_all_requests()
-        self.imdb_top_250 = self.scrape_imdb_top_250()
 
         self.combined_movies = self.get_combined_movies()
         self.upcoming_movies = []
@@ -211,49 +202,6 @@ class MovieCleaner:
 
         return round(sum(ratings) / len(ratings), 1)
 
-    def scrape_imdb_top_250(self) -> List[str]:
-        """
-        Scrape the IMDB Top 250 list and return the titles.
-        """
-
-        try:
-            # Get the IMDB Top 250 page
-            response = requests.get(
-                "https://www.imdb.com/chart/top",
-                headers={
-                    "User-Agent": "Mozilla/5.0",
-                },
-                verify=False,
-            )
-            response.raise_for_status()
-
-            # Parse the HTML
-            soup = BeautifulSoup(response.text, "html.parser")
-
-            # Find all movie titles in the Top 250
-            top_250 = json.loads(
-                "".join(soup.find("script", {"type": "application/ld+json"}).contents)
-            )
-
-            return [html.unescape(x["item"]["name"]) for x in top_250["itemListElement"]]
-
-        except Exception as e:
-            logger.error(f"Error retrieving IMDB Top 250: {e}")
-            return []
-
-    def _is_imdb_top_250(self, movie_info: MovieInfo) -> bool:
-        """
-        Check if a movie is currently in the IMDB Top 250 list by scraping the IMDB website.
-
-        Args:
-            movie_info: MovieInfo object containing movie details
-
-        Returns:
-            bool: True if movie is in IMDB Top 250, False otherwise
-        """
-
-        return movie_info.title in self.imdb_top_250
-
     def _decision_inputs(self, movie_info: MovieInfo) -> Dict[str, Any]:
         """Capture the signals that drive a retention decision, for auditing.
 
@@ -270,12 +218,12 @@ class MovieCleaner:
 
         return {
             "user_rating": movie_info.user_rating,
+            "imdb_rating": movie_info.external_ratings.imdb,
             "avg_external_rating": self._determine_average_external_rating(movie_info),
             "last_watched": movie_info.last_watched,
             "added_at": movie_info.added_at,
             "requested_by": requested_by,
             "is_admin_request": is_admin_request,
-            "imdb_top_250": self._is_imdb_top_250(movie_info),
         }
 
     def _retention_window(
@@ -310,10 +258,9 @@ class MovieCleaner:
     def _evaluate_retention(self, movie_info: MovieInfo) -> RetentionDecision:
         """Evaluate a movie against the retention policy.
 
-        Protections (a high user rating, IMDB Top 250 membership, or a high
-        average external rating) keep a movie forever. Otherwise the movie is
-        assigned a retention window and an expiry date measured from its last
-        activity.
+        Protections (a high user rating, a high IMDB rating, or a high average
+        external rating) keep a movie forever. Otherwise the movie is assigned
+        a retention window and an expiry date measured from its last activity.
 
         Args:
             movie_info: MovieInfo object containing movie details
@@ -328,8 +275,9 @@ class MovieCleaner:
         if movie_info.user_rating and movie_info.user_rating >= rating_threshold.admin:
             return RetentionDecision(RetentionReason.PROTECTED_USER_RATING, None, None, inputs)
 
-        if inputs["imdb_top_250"]:
-            return RetentionDecision(RetentionReason.PROTECTED_IMDB_TOP_250, None, None, inputs)
+        imdb_rating = inputs["imdb_rating"]
+        if imdb_rating is not None and imdb_rating >= rating_threshold.imdb_protect:
+            return RetentionDecision(RetentionReason.PROTECTED_HIGH_IMDB_RATING, None, None, inputs)
 
         avg_external = inputs["avg_external_rating"]
         if avg_external is not None and avg_external >= 8:

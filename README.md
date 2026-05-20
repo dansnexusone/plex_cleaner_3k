@@ -12,7 +12,7 @@ plex_cleaner_3k is an automated solution for managing your Plex movie library by
   - External ratings (IMDB, Rotten Tomatoes, TMDB, Metacritic, Trakt)
   - Watch history
   - Request source (admin vs regular users)
-  - IMDB Top 250 status
+  - High IMDB rating (configurable threshold)
 - Service integrations:
   - Plex Media Server
   - Dual Radarr instances (4K and 1080p)
@@ -135,6 +135,7 @@ deletion_threshold:
       user: 5
     rules:
       low: 3    # Movies rated <= 1.5 stars use the low_rated window
+      imdb_protect: 8.0  # Movies with an IMDB rating >= this are protected from deletion
 
 audit:
   log_path: output/deletions.jsonl        # Append-only JSONL trail of deletions and expiring-soon events
@@ -191,7 +192,7 @@ The cleaner evaluates movies based on:
 A movie is **protected (never deleted)** if any of these hold:
 
 - Your Plex rating is ≥ 2.5 stars
-- It is in the IMDB Top 250
+- Its IMDB rating is ≥ 8.0 (configurable via `imdb_protect`)
 - Its average external rating is ≥ 8/10
 
 Otherwise it is assigned a retention window, measured from the last watch (or the date it was added, if never watched):

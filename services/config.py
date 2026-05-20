@@ -138,6 +138,7 @@ class ConfigManager:
                 admin=data["deletion_threshold"]["rating"]["users"]["admin"],
                 user=data["deletion_threshold"]["rating"]["users"]["user"],
                 low_rating=data["deletion_threshold"]["rating"]["rules"]["low"],
+                imdb_protect=data["deletion_threshold"]["rating"]["rules"].get("imdb_protect", 8.0),
             ),
             audit=AuditConfig(
                 log_path=data.get("audit", {}).get("log_path", "output/deletions.jsonl"),
