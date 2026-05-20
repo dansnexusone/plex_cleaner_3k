@@ -140,7 +140,7 @@ deletion_threshold:
 audit:
   log_path: output/deletions.jsonl        # Append-only JSONL trail of deletions and expiring-soon events
   summary_path: output/expiring_soon.txt  # Human-readable digest (e.g. for MOTD)
-  expiring_soon_days: 30                   # Window for the digest and "expiring soon" audit events
+  expiring_soon_days: 60                   # Window for the digest and "expiring soon" audit events
 ```
 
 ## Usage
