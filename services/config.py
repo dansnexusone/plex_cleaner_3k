@@ -5,6 +5,7 @@ import yaml
 from dotenv import load_dotenv
 
 from models.config import (
+    AuditConfig,
     Config,
     DaysThreshold,
     OverseerrConfig,
@@ -112,7 +113,11 @@ class ConfigManager:
                 api_key=data["tautulli"]["api_key"],
             ),
             radarr=[
-                RadarrConfig(url=data[instance]["url"], api_key=data[instance]["api_key"])
+                RadarrConfig(
+                    url=data[instance]["url"],
+                    api_key=data[instance]["api_key"],
+                    name=instance,
+                )
                 for instance in data
                 if "radarr" in instance
             ],
@@ -127,10 +132,16 @@ class ConfigManager:
                 admin=data["deletion_threshold"]["days"]["users"]["admin"],
                 user=data["deletion_threshold"]["days"]["users"]["user"],
                 low_rating=data["deletion_threshold"]["days"]["rules"]["low_rated"],
+                mid=data["deletion_threshold"]["days"]["rules"].get("mid", 90),
             ),
             rating_threshold=RatingThreshold(
                 admin=data["deletion_threshold"]["rating"]["users"]["admin"],
                 user=data["deletion_threshold"]["rating"]["users"]["user"],
                 low_rating=data["deletion_threshold"]["rating"]["rules"]["low"],
+            ),
+            audit=AuditConfig(
+                log_path=data.get("audit", {}).get("log_path", "output/deletions.jsonl"),
+                summary_path=data.get("audit", {}).get("summary_path", "output/expiring_soon.txt"),
+                expiring_soon_days=data.get("audit", {}).get("expiring_soon_days", 30),
             ),
         )

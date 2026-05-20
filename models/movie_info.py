@@ -3,6 +3,7 @@ from datetime import datetime
 from typing import Optional
 
 from .external_rating import ExternalRating
+from .retention_decision import RetentionDecision
 
 
 @dataclass
@@ -16,3 +17,4 @@ class MovieInfo:
     last_watched: Optional[datetime]
     user_rating: Optional[float]
     expires_at: Optional[datetime] = None
+    decision: Optional[RetentionDecision] = None

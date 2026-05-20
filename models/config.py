@@ -24,6 +24,7 @@ class SonarrConfig:
 class RadarrConfig:
     url: str
     api_key: str
+    name: str = ""
 
 
 @dataclass
@@ -31,6 +32,7 @@ class DaysThreshold:
     admin: int
     user: int
     low_rating: int
+    mid: int
 
 
 @dataclass
@@ -50,6 +52,13 @@ class OverseerrConfig:
 
 
 @dataclass
+class AuditConfig:
+    log_path: str
+    summary_path: str
+    expiring_soon_days: int = 30
+
+
+@dataclass
 class Config:
     plex: PlexConfig
     tautulli: TautulliConfig
@@ -57,4 +66,5 @@ class Config:
     overseerr: OverseerrConfig
     days_threshold: DaysThreshold
     rating_threshold: RatingThreshold
+    audit: AuditConfig
     admin_emails: list[str] = field(default_factory=list)

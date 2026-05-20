@@ -4,10 +4,16 @@ deletion_threshold:
       admin: 365 # One year threshold for movies added / requested by an Admin
       user: 14 # Two week threshold for movies added / requested by a User
     rules:
-      low_rated: 30 # 30 days threshold for movies with a low rating
+      low_rated: 30 # 30 day threshold for movies rated <= 1.5 Stars
+      mid: 90 # ~3 month threshold for "meh" movies rated between 1.5 and 2.5 Stars
   rating:
     users:
-      admin: 5  # Admin users who rate movies <= 2.5 Stars will be in-scope for deletion
-      user: 5  # User users who rate movies <= 2.5 Stars will be in-scope for deletion
+      admin: 5 # Movies rated >= 2.5 Stars are protected from deletion
+      user: 5
     rules:
-      low: 3  # Movies with a rating <= 1.5 Stars will be in-scope for deletion within rules.low_rated days
+      low: 3 # Movies rated <= 1.5 Stars use the low_rated window
+
+audit:
+  log_path: output/deletions.jsonl # Append-only JSONL trail of deletions and expiring-soon events
+  summary_path: output/expiring_soon.txt # Human-readable digest, e.g. for MOTD
+  expiring_soon_days: 30 # Window for the expiring-soon digest and audit events
