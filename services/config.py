@@ -17,6 +17,14 @@ from models.config import (
 )
 
 
+def _env_flag(name: str, default: bool) -> bool:
+    """Read a boolean from the environment, falling back to a default when unset."""
+    value = os.environ.get(name)
+    if value is None:
+        return default
+    return value.strip().lower() in ("1", "true", "yes", "on")
+
+
 class ConfigManager:
     def __init__(self, config_path: str = "config.yaml"):
         self.config_path = Path(config_path)
@@ -158,7 +166,7 @@ class ConfigManager:
     def _load_ntfy(self, data: dict) -> NtfyConfig:
         """Build the ntfy config, letting NTFY_* env vars override the file."""
         return NtfyConfig(
-            enabled=data.get("enabled", False),
+            enabled=_env_flag("NTFY_ENABLED", data.get("enabled", False)),
             server=os.environ.get("NTFY_SERVER", data.get("server", "https://ntfy.sh")),
             topic=os.environ.get("NTFY_TOPIC", data.get("topic", "")),
             priority=data.get("priority", "default"),
