@@ -60,6 +60,15 @@ class AuditConfig:
 
 
 @dataclass
+class NtfyConfig:
+    enabled: bool = False
+    server: str = "https://ntfy.sh"
+    topic: str = ""
+    priority: str = "default"
+    notify_within_days: int = 1
+
+
+@dataclass
 class Config:
     plex: PlexConfig
     tautulli: TautulliConfig
@@ -68,4 +77,5 @@ class Config:
     days_threshold: DaysThreshold
     rating_threshold: RatingThreshold
     audit: AuditConfig
+    ntfy: NtfyConfig = field(default_factory=NtfyConfig)
     admin_emails: list[str] = field(default_factory=list)

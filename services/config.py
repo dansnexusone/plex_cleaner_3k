@@ -8,6 +8,7 @@ from models.config import (
     AuditConfig,
     Config,
     DaysThreshold,
+    NtfyConfig,
     OverseerrConfig,
     PlexConfig,
     RadarrConfig,
@@ -138,11 +139,28 @@ class ConfigManager:
                 admin=data["deletion_threshold"]["rating"]["users"]["admin"],
                 user=data["deletion_threshold"]["rating"]["users"]["user"],
                 low_rating=data["deletion_threshold"]["rating"]["rules"]["low"],
-                imdb_protect=data["deletion_threshold"]["rating"]["rules"].get("imdb_protect", 8.0),
+                imdb_protect=data["deletion_threshold"]["rating"]["rules"].get(
+                    "imdb_protect", 8.0
+                ),
             ),
             audit=AuditConfig(
-                log_path=data.get("audit", {}).get("log_path", "output/deletions.jsonl"),
-                summary_path=data.get("audit", {}).get("summary_path", "output/expiring_soon.txt"),
+                log_path=data.get("audit", {}).get(
+                    "log_path", "output/deletions.jsonl"
+                ),
+                summary_path=data.get("audit", {}).get(
+                    "summary_path", "output/expiring_soon.txt"
+                ),
                 expiring_soon_days=data.get("audit", {}).get("expiring_soon_days", 30),
             ),
+            ntfy=self._load_ntfy(data.get("ntfy", {})),
+        )
+
+    def _load_ntfy(self, data: dict) -> NtfyConfig:
+        """Build the ntfy config, letting NTFY_* env vars override the file."""
+        return NtfyConfig(
+            enabled=data.get("enabled", False),
+            server=os.environ.get("NTFY_SERVER", data.get("server", "https://ntfy.sh")),
+            topic=os.environ.get("NTFY_TOPIC", data.get("topic", "")),
+            priority=data.get("priority", "default"),
+            notify_within_days=data.get("notify_within_days", 1),
         )

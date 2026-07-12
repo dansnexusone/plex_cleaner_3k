@@ -18,3 +18,10 @@ audit:
   log_path: output/deletions.jsonl # Append-only JSONL trail of deletions and expiring-soon events
   summary_path: output/expiring_soon.txt # Human-readable digest, e.g. for MOTD
   expiring_soon_days: 60 # Window for the expiring-soon digest and audit events
+
+ntfy:
+  enabled: false # Set true to push notifications on deletions / imminent expirations
+  server: https://ntfy.sh # ntfy server (override with NTFY_SERVER)
+  topic: "" # Your ntfy topic (override with NTFY_TOPIC)
+  priority: default # ntfy message priority (min, low, default, high, urgent)
+  notify_within_days: 1 # Also notify when a movie is within this many days of deletion
