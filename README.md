@@ -117,6 +117,7 @@ OVERSEERR_PASSWORD=your-overseerr-admin-password
 OVERSEERR_ADMIN_EMAILS=your-admin-email-address-1,your-admin-email-address-2,...
 
 # NTFY (optional — overrides the ntfy block in config.yaml)
+NTFY_ENABLED=true
 NTFY_TOPIC=your-ntfy-topic
 NTFY_SERVER=https://ntfy.sh
 ```
@@ -233,7 +234,7 @@ Example audit entry:
 
 ### Push notifications via ntfy
 
-Enable the `ntfy` block in `config.yaml` (or set `NTFY_TOPIC` / `NTFY_SERVER`) to get a push whenever a run does something worth knowing about:
+Enable the `ntfy` block in `config.yaml`, or set `NTFY_ENABLED=true` and `NTFY_TOPIC` in your `.env`, to get a push whenever a run does something worth knowing about:
 
 - Movies were deleted this run, or
 - A movie is within `notify_within_days` (default 1) of deletion — a last-chance heads-up before the next run removes it.
