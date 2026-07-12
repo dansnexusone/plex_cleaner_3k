@@ -21,6 +21,7 @@ plex_cleaner_3k is an automated solution for managing your Plex movie library by
 - Dry-run mode for testing deletions
 - JSONL audit log recording every deletion (and upcoming expiry) with the reason and the data behind the decision
 - Human-readable expiring-soon digest, ideal for surfacing via MOTD on SSH login
+- Optional ntfy push notifications when movies are deleted or about to be
 - Detailed logging
 
 ## Requirements
@@ -114,6 +115,10 @@ OVERSEERR_API_KEY=your-overseerr-api-key
 OVERSEERR_EMAIL=your-overseerr-admin-email
 OVERSEERR_PASSWORD=your-overseerr-admin-password
 OVERSEERR_ADMIN_EMAILS=your-admin-email-address-1,your-admin-email-address-2,...
+
+# NTFY (optional — overrides the ntfy block in config.yaml)
+NTFY_TOPIC=your-ntfy-topic
+NTFY_SERVER=https://ntfy.sh
 ```
 
 ### Configuration File (config.yaml)
@@ -141,6 +146,13 @@ audit:
   log_path: output/deletions.jsonl        # Append-only JSONL trail of deletions and expiring-soon events
   summary_path: output/expiring_soon.txt  # Human-readable digest (e.g. for MOTD)
   expiring_soon_days: 60                   # Window for the digest and "expiring soon" audit events
+
+ntfy:
+  enabled: false           # Set true to push notifications (see below)
+  server: https://ntfy.sh  # ntfy server; override with NTFY_SERVER
+  topic: ""                # Your ntfy topic; override with NTFY_TOPIC
+  priority: default        # min, low, default, high, urgent
+  notify_within_days: 1    # Also notify when a movie is within this many days of deletion
 ```
 
 ## Usage
@@ -218,6 +230,15 @@ Example audit entry:
 ```json
 {"ts": "2026-05-20T14:03:11", "run_id": "2026-05-20T14:00:00", "action": "deleted", "dry_run": false, "instances": ["radarr_4k"], "size_freed_bytes": 8400000000, "title": "Some Movie", "tmdb_id": 12345, "expires_at": "2026-05-06", "reason": "unrated_user", "retention_days": 14, "inputs": {"user_rating": null, "avg_external_rating": 6.2, "last_watched": null, "added_at": "2025-01-02T00:00:00", "requested_by": "x@y.com", "is_admin_request": false, "imdb_top_250": false}}
 ```
+
+### Push notifications via ntfy
+
+Enable the `ntfy` block in `config.yaml` (or set `NTFY_TOPIC` / `NTFY_SERVER`) to get a push whenever a run does something worth knowing about:
+
+- Movies were deleted this run, or
+- A movie is within `notify_within_days` (default 1) of deletion — a last-chance heads-up before the next run removes it.
+
+Runs where nothing was deleted and nothing is imminent send nothing. Disabled by default; a missing topic is treated as disabled.
 
 ### Surfacing the summary via MOTD
 
